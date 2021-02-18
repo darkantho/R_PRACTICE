@@ -1,0 +1,135 @@
+---
+title: "metodos de analitica"
+author: "Juan carlos letechi moran"
+date: "1/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+```{r}
+library("magrittr")
+library("chron")
+library("e1071")
+library("MASS")
+library("klaR")
+library("lattice")
+library("ggplot2")
+library("caret")
+library("readr")
+library("cluster")
+library("fpc")
+library("arules")
+
+```
+
+```{r}
+last.fm <- read.transactions(file = "https://www.biz.uiowa.edu/faculty/jledolter/DataMining/lastfm.csv", sep = "," , header = T)
+
+```
+```{r}
+last_fm <- read.csv(file = "https://www.biz.uiowa.edu/faculty/jledolter/DataMining/lastfm.csv", sep = "," , header = T)
+```
+
+```{r}
+fac<-as.data.frame(last_fm$artist)
+tabla<-table(last_fm$artist)
+top_10<-sort(tabla,decreasing = TRUE)[1:10]
+top_10
+```
+
+
+```{r}
+inspect(last.fm[1:10])
+```
+
+## A
+
+```{r}
+itemsets_frecuentes <- apriori(data = last.fm,parameter = list(support = 0.02,target = "Frequent itemsets"),control = list(verbose = FALSE))
+
+summary(itemsets_frecuentes)
+
+top_10 <- sort(itemsets_frecuentes, by = "support", decreasing = TRUE)[1:10]
+inspect(top_10) 
+
+
+```
+
+
+
+
+```{r}
+as(top_10, Class = "data.frame") %>%ggplot(aes(x = reorder(items, support), y = support)) + geom_col(fill = "skyblue3", width = 0.5) +coord_flip() +labs(y = "soporte", x = "itemsets") +theme_bw()
+
+```
+## B
+
+```{r}
+
+frecuentes_1 <- apriori(data = last.fm,parameter = list(support = 0.03,target = "frequent itemsets"),control = list(verbose = FALSE))
+summary(frecuentes_1)
+top5_1 <- sort(frecuentes_1, by = "support", decreasing = TRUE)[1:10]
+inspect(top5_1)
+
+
+```
+
+```{r}
+frecuentes_2<- apriori(data = last.fm,parameter = list(support = 0.05,target = "frequent itemsets"),
+control = list(verbose = FALSE))
+summary(frecuentes_2)
+top5_2 <- sort(frecuentes_2, by = "support", decreasing = TRUE)[1:10]
+inspect(top5_2)
+```
+
+```{r}
+frecuentes_3<- apriori(data = last.fm,parameter = list(support = 0.01,target = "frequent itemsets"),
+control = list(verbose = FALSE))
+summary(frecuentes_3)
+top5_3 <- sort(frecuentes_3, by = "support", decreasing = TRUE)[1:10]
+inspect(top5_3)
+```
+
+```{r}
+frecuentes_4<- apriori(data = last.fm,parameter = list(support = 0.005,target = "frequent itemsets"),
+control = list(verbose = FALSE))
+summary(frecuentes_4)
+top5_4 <- sort(frecuentes_3, by = "support", decreasing = TRUE)[1:10]
+inspect(top5_4)
+
+
+
+```
+
+```{r}
+frecuentes_5<- apriori(data = last.fm,parameter = list(support = 0.015,target = "frequent itemsets"),
+control = list(verbose = FALSE))
+summary(frecuentes_5)
+top5_5 <- sort(frecuentes_5, by = "support", decreasing = TRUE)[1:10]
+inspect(top5_5)
+
+```
+
+
+## C
+
+```{r}
+rule_20 <- apriori(data = last.fm,parameter = list(support = 0.01,confidence = 0.5,target = "rules"),control = list(verbose = FALSE))
+print(paste("Reglas generadas:", length(rule_20)))
+summary(rule_20)
+inspect(sort(rule_20, decreasing = TRUE, by = "confidence")[1:20])
+```
+
+## d
+```{r}
+rule_20_1 <- apriori(data = last.fm,parameter = list(support = 0.6,confidence = 0.5,target = "rules"),control = list(verbose = FALSE))
+print(paste("Reglas generadas:", length(rule_20_1)))
+summary(rule_20_1)
+inspect(sort(rule_20_1, decreasing = TRUE, by = "confidence")[1:20])
+```
+
+## e

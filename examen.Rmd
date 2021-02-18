@@ -1,0 +1,185 @@
+---
+title: "Metodos de Analitica Examen"
+author: "Juan carlos letechi moran"
+date: "1/26/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+```{r}
+library("rpart.plot")
+library("chron")
+library("e1071")
+library("MASS")
+library("klaR")
+library("lattice")
+library("ggplot2")
+library("caret")
+library("readr")
+library("cluster")
+library("fpc")
+library("arules")
+library("rpart")
+library("FactoMineR")
+library("factoextra")
+```
+
+
+# TEMA 1
+
+## convirtiendo en variables categoricas
+
+```{r}
+counts_c<-read.csv("cuentas_por_cobrar.csv",sep=",",stringsAsFactors = TRUE)
+counts_c<-subset(counts_c,select=-c(FechaElectronica,FechaFactura,FechaVencimiento,FechaPago                                  ,DiasTarde,DiasPago))
+```
+
+## Variables adicionales
+
+```{r}
+num_IDcliente<-as.character(counts_c$IDCliente)
+num_IDcliente_f<-c()
+contador=0
+for(i in num_IDcliente){
+  contador=contador+1
+  var<-strsplit(i,"-")
+  # print(var[[1]][1])
+  num_IDcliente_f[contador]<-as.integer(var[[1]][1])
+}
+counts_c$IDCliente<-num_IDcliente_f
+```
+
+
+## particionando los datos 70 30
+
+```{r}
+particion_2=createDataPartition(counts_c$Disputa,p=0.7,list=FALSE,times=1)
+X_TRAIN_2 = counts_c[particion_2,]
+Y_TRAIN_2=X_TRAIN_2$Disputa
+X_TRAIN_2=subset(X_TRAIN_2,select=-Disputa)
+
+X_TEST_2 =counts_c[-particion_2,]
+Y_TEST_2=X_TEST_2$Disputa
+X_TEST_2=subset(X_TEST_2,select=-Disputa)
+```
+## MOdelo de regresion logistico
+```{r}
+modelo_4 <-train(x=X_TRAIN_2,
+                y=Y_TRAIN_2,
+                method="glm",
+                family="binomial",
+                trControl=trainControl(method='cv',
+                                       number=10,
+                                       summaryFunction=twoClassSummary,
+                                       classProbs=TRUE,
+                                       savePredictions=TRUE))
+
+modelo_4
+```
+```{r}
+prediccion_4 <-predict(modelo_4, X_TEST_2)
+
+confusionMatrix(prediccion_4, Y_TEST_2)
+```
+
+## Modelo de arbol de clasificacion
+
+```{r}
+modelo_2<- train(x=X_TRAIN_2,y=Y_TRAIN_2,method="rpart",trControl=trainControl(method='cv',
+         number=10,summaryFunction=twoClassSummary,classProbs=TRUE,savePredictions=TRUE))
+
+modelo_2
+
+
+```
+```{r}
+prediccion_2 <- predict(modelo_2, X_TEST_2)
+
+confusionMatrix(prediccion_2, Y_TEST_2)
+```
+## Graficando el arbol
+
+```{r}
+
+plot(modelo_2$finalModel, uniform=TRUE)
+text(modelo_2$finalModel, use.n=TRUE, all=TRUE, cex=.7)
+
+```
+
+
+```{r}
+rpart.plot(modelo_2$finalModel, box.palette="RdBu", shadow.col="gray", nn=TRUE)
+```
+## analisis comparativo
+
+
+
+
+# Tema 2
+
+importando el Dataset
+
+```{r}
+transaction<-read_csv("Sales_Transactions_Dataset_Weekly.csv")
+products_name<-as.factor(transaction$Product_Code)
+nomalized_trans<-transaction[56:107]
+row.names(nomalized_trans)<-products_name
+```
+## cluster jerarquico o particional
+
+```{r}
+res.pca <- PCA(nomalized_trans, ncp = 3, graph = FALSE)
+```
+
+```{r}
+res.hcpc <- HCPC(res.pca, graph = FALSE,nb.clust = 2)
+```
+
+```{r}
+fviz_dend(res.hcpc, 
+          cex = 0.7,                     # Label size
+          palette = "jco",               # Color palette see ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Add rectangle around groups
+          rect_border = "jco",           # Rectangle color
+          labels_track_height = 0.8      # Augment the room for labels
+          )
+```
+
+
+
+```{r}
+fviz_cluster(res.hcpc,
+             repel = TRUE,            # Avoid label overlapping
+             show.clust.cent = TRUE, # Show cluster centers
+             palette = "jco",         # Color palette see ?ggpubr::ggpar
+             ggtheme = theme_minimal(),
+             main = "Factor map"
+             )
+```
+
+## determine las variables a utilizar
+
+yo use las normalizadas
+
+## medida de distancia apropiada
+   supongo que euclidiana
+
+## numero de clusters 
+
+```{r}
+k.max <- 15
+data <-nomalized_trans
+wss <- sapply(1:k.max,function(k){kmeans(data, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+## aplicacion
+

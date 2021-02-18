@@ -1,0 +1,207 @@
+---
+title: "IISE_proyecto"
+author: "Juan carlos letechi moran,luis Anthony villacis moran, isabel alcivar"
+date: "1/22/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# librerias
+```{r}
+
+rm(list=ls())
+
+library("chron")
+library("e1071")
+library("MASS")
+library("klaR")
+library("lattice")
+library("ggplot2")
+library("caret")
+library("readxl")
+library("plyr")
+library("pROC")
+library("xgboost")
+library("catboost")
+```
+# arreglo de datos
+```{r}
+dataset_neo<-read_excel("~/Documents/IISE_2021/ESTADISTICA_FINAL_PARA_TESIS.xlsx")
+
+```
+```{r}
+variables_selec<-subset(dataset_neo,select = c(SEXO,EGA_NACIDO,NUM_CONSULTAS,EGA_ACTUAL,APGAR_1M,APGAR_5M,APGAR_10M,PESO,TALLA,PC,SGA_AGA_LGA))
+
+variables_selec$PESO<-as.numeric(variables_selec$PESO)
+count(dataset_neo$SGA_AGA_LGA)
+```
+```{r}
+SGA_1=subset(variables_selec,variables_selec$SGA_AGA_LGA=="SGA")
+SGA_1=SGA_1[1:70,]
+
+AGA_1=subset(variables_selec,variables_selec$SGA_AGA_LGA=="AGA")
+AGA_1=AGA_1[1:70,]
+
+new_data=rbind(SGA_1,AGA_1)
+X_TRAIN=subset(new_data,select = -SGA_AGA_LGA)
+Y_TRAIN=new_data$SGA_AGA_LGA
+```
+
+```{r}
+SGA_1_1=subset(variables_selec,variables_selec$SGA_AGA_LGA=="SGA")[71:102,]
+
+
+AGA_1_1=subset(variables_selec,variables_selec$SGA_AGA_LGA=="AGA")[71:102,]
+
+new_data_1=rbind(SGA_1_1,AGA_1_1)
+X_TEST=subset(new_data_1,select = -SGA_AGA_LGA)
+Y_TEST=new_data_1$SGA_AGA_LGA
+
+X_TEST[is.na(X_TEST)]<-0
+X_TRAIN[is.na(X_TRAIN)]<-0
+
+```
+
+# Random Forest
+```{r warning=FALSE}
+modelo_3 <- train(x=X_TRAIN,y=Y_TRAIN,method="rf",ntree=100,trControl=trainControl(method='cv',number=20,summaryFunction=twoClassSummary,classProbs=TRUE,savePredictions=TRUE))
+
+modelo_3
+```
+```{r}
+prediccion_3 <- predict(modelo_3, X_TEST)
+
+cf_1<-confusionMatrix(prediccion_3, as.factor(Y_TEST))
+```
+
+```{r}
+rf<-roc(modelo_3$pred$obs,modelo_3$pred$AGA)
+plot(rf)
+```
+
+# Redundant Feature Elimination
+```{r}
+XTRAIN_F=X_TRAIN
+XTRAIN_F[sapply(XTRAIN_F,is.character)] <- lapply(XTRAIN_F[sapply(XTRAIN_F, is.character)], as.factor)
+
+controlrfe<-rfeControl(functions = rfFuncs,method = "cv",number = 10)
+results<-rfe(XTRAIN_F,as.factor(Y_TRAIN),sizes = c(1:10),rfeControl = controlrfe)
+print(results)
+```
+
+```{r}
+
+plot(results,type=c("g","o"))
+
+```
+```{r}
+
+results$optVariables[results$results$Variables]
+
+```
+# Support vector machine
+```{r}
+y<-as.factor(Y_TRAIN)
+x <- cbind(XTRAIN_F,y)
+# Fitting model
+fit <-svm(y~ ., data = x)
+summary(fit)
+
+```
+
+```{r}
+#Predict Output 
+predicted_2= predict(fit,X_TEST)
+cf_2<-confusionMatrix(predicted_2, as.factor(Y_TEST))
+
+```
+
+# Native bayes
+```{r}
+fit_nb <-naiveBayes(y ~ ., data = x)
+summary(fit_nb)
+
+```
+
+```{r}
+predicted_1= predict(fit_nb,X_TEST)
+cf_3<-confusionMatrix(predicted_1, as.factor(Y_TEST))
+```
+# XGB BOOST
+
+```{r}
+TrainControl <- trainControl( method = "repeatedcv", number = 10, repeats = 4)
+model_xgb<- train(y ~ ., data = x, method = "xgbLinear", trControl = TrainControl,verbose = FALSE)
+```
+
+
+```{r}
+predicted_xgb<- predict(model_xgb,X_TEST)
+cf_4<-confusionMatrix(predicted_xgb, as.factor(Y_TEST))
+```
+
+# Catboost
+```{r}
+fit_control <- trainControl(method = "cv", number = 4,classProbs = TRUE)
+
+grid <- expand.grid(depth = c(4, 6, 8),learning_rate = 0.1,iterations =100, l2_leaf_reg = 1e-3,            rsm = 0.95, border_count = 64)
+
+yy=ifelse(Y_TRAIN=="AGA",1,0)
+# yy=as.numeric(as.character(yy))
+# l_train<-catboost.load_pool(XTRAIN_F,yy)
+
+report <- train(XTRAIN_F, as.factor(make.names(y)),method = catboost.caret, preProc = NULL,tuneGrid = grid, trControl = fit_control)
+
+print(report)
+
+```
+```{r}
+importance <- varImp(report, scale = FALSE)
+print(importance)
+
+```
+
+```{r}
+XTEST_F=X_TEST
+YTEST_F=ifelse(Y_TEST=="AGA",1, 0)
+# YTEST_F=as.integer(YTEST_F)
+# YTEST_F=as.data.frame(YTEST_F)
+# YTEST_F=as.factor(Y_TEST)
+XTEST_F[sapply(XTEST_F,is.character)] <- lapply(XTEST_F[sapply(XTEST_F, is.character)], as.factor)
+load_test<-catboost.load_pool(XTEST_F,label = )
+pred_cat<-predict(report,XTEST_F,type = "raw")
+cf_5<-confusionMatrix(pred_cat,as.factor(Y_TEST))
+```
+# Estadisticas
+
+```{r}
+accuracy_all_models<-c(cf_1$overall["Accuracy"],
+                       cf_2$overall["Accuracy"],
+                       cf_3$overall["Accuracy"],
+                       cf_4$overall["Accuracy"],
+                       cf_5$overall["Accuracy"])
+
+sensitive_all_model<-c(cf_1$byClass["Sensitivity"],
+                       cf_2$byClass["Sensitivity"],
+                       cf_3$byClass["Sensitivity"],
+                       cf_4$byClass["Sensitivity"],
+                       cf_5$byClass["Sensitivity"])
+
+specifi_all_model<-c(cf_1$byClass["Specificity"],
+                     cf_2$byClass["Specificity"],
+                     cf_3$byClass["Specificity"],
+                     cf_4$byClass["Specificity"],
+                     cf_5$byClass["Specificity"])
+
+dnom1 <- c("Random Forest","SVM","native Bayes","XGBOOST","CatBoost")
+
+comparacion<- cbind(dnom1,round(accuracy_all_models,4),round(specifi_all_model,4),round(sensitive_all_model,4))
+colnames(comparacion) <- c("Modelos","Accuracy","Specificity","Sensitivity")
+rownames(comparacion) <- NULL
+comparacion
+
+
+```
+
